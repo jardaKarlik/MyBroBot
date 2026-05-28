@@ -15,7 +15,7 @@ fi
 # uv — Python tool runner, installed to /data/uv
 if ! command -v uv &>/dev/null; then
   echo "[skills-setup] Installing uv..."
-  UV_INSTALL_DIR=/data/uv curl -LsSf https://astral.sh/uv/install.sh | sh
+  curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/data/uv sh
 fi
 
 # gogcli — Google Workspace CLI binary, installed to /data/bin
@@ -24,6 +24,12 @@ if ! command -v gog &>/dev/null; then
   ARCH=$(dpkg --print-architecture)
   curl -fsSL "https://github.com/openclaw/gogcli/releases/download/v0.19.0/gogcli_0.19.0_linux_${ARCH}.tar.gz" \
     | tar -xz -C /data/bin gog
+fi
+
+# clawhub CLI — registry auth, skill/plugin search, publish, sync
+if ! command -v clawhub &>/dev/null; then
+  echo "[skills-setup] Installing clawhub..."
+  npm install -g clawhub
 fi
 
 echo "[skills-setup] Skill prerequisites ready."
