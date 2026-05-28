@@ -54,6 +54,13 @@ RUN apt-get update \
 # `openclaw update` expects pnpm. Provide it in the runtime image.
 RUN corepack enable && corepack prepare pnpm@10.23.0 --activate
 
+# Skill prerequisites — installed at build time so they're always available.
+# uv: Python tool runner used by Python-based skills (nano-pdf, etc.)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+# mcporter: MCP server manager — override prefix because /data volume isn't mounted at build time
+RUN NPM_CONFIG_PREFIX=/usr/local npm install -g mcporter
+
 # Persist user-installed tools by default by targeting the Railway volume.
 # - npm global installs -> /data/npm
 # - pnpm global installs -> /data/pnpm (binaries) + /data/pnpm-store (store)
