@@ -54,12 +54,6 @@ RUN apt-get update \
 # `openclaw update` expects pnpm. Provide it in the runtime image.
 RUN corepack enable && corepack prepare pnpm@10.23.0 --activate
 
-# Skill prerequisites — installed at build time so they're always available.
-# uv: Python tool runner used by Python-based skills (nano-pdf, etc.)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
-# mcporter: MCP server manager — override prefix because /data volume isn't mounted at build time
-RUN NPM_CONFIG_PREFIX=/usr/local npm install -g mcporter
 
 # Persist user-installed tools by default by targeting the Railway volume.
 # - npm global installs -> /data/npm
@@ -68,7 +62,7 @@ ENV NPM_CONFIG_PREFIX=/data/npm
 ENV NPM_CONFIG_CACHE=/data/npm-cache
 ENV PNPM_HOME=/data/pnpm
 ENV PNPM_STORE_DIR=/data/pnpm-store
-ENV PATH="/data/npm/bin:/data/pnpm:${PATH}"
+ENV PATH="/data/bin:/data/uv:/data/npm/bin:/data/pnpm:${PATH}"
 
 WORKDIR /app
 
@@ -84,6 +78,8 @@ RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /openclaw/dist/entry.js "$@"'
   && chmod +x /usr/local/bin/openclaw
 
 COPY src ./src
+COPY scripts ./scripts
+RUN chmod +x /app/scripts/setup-skills.sh
 
 # The wrapper listens on $PORT.
 # IMPORTANT: Do not set a default PORT here.
@@ -93,4 +89,4 @@ EXPOSE 8080
 
 # Ensure PID 1 reaps zombies and forwards signals.
 ENTRYPOINT ["tini", "--"]
-CMD ["node", "src/server.js"]
+CMD ["/bin/sh", "-c", "/app/scripts/setup-skills.sh && exec node src/server.js"]
