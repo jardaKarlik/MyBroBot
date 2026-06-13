@@ -76,12 +76,12 @@ if ! command -v gcloud &>/dev/null && [ ! -f /data/bin/gcloud ]; then
   echo "[setup] Installing gcloud CLI..."
   ARCH=$(gcloud_arch)
   curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${ARCH}.tar.gz" \
-    | tar -xz -C /tmp
-  /tmp/google-cloud-sdk/install.sh --quiet --install-directory=/data/google-cloud-sdk --additional-components alpha beta
+    | tar -xz -C /data
+  # Install alpha/beta components and set up
+  /data/google-cloud-sdk/install.sh --quiet --additional-components alpha beta --install-python false --path-update false --command-completion false --usage-reporting false 2>/dev/null || true
   ln -sf /data/google-cloud-sdk/bin/gcloud /data/bin/gcloud
   ln -sf /data/google-cloud-sdk/bin/gsutil /data/bin/gsutil
   ln -sf /data/google-cloud-sdk/bin/bq /data/bin/bq
-  rm -rf /tmp/google-cloud-sdk
   echo "[setup] gcloud CLI installed to /data/google-cloud-sdk"
 fi
 
