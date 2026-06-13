@@ -53,8 +53,9 @@ install_npm_global "composio"
 # skillfish — Skillfish CLI (ClawHub ecosystem)
 install_npm_global "skillfish"
 
-# firecrawl — Firecrawl CLI for web scraping/search
-install_npm_global "@firecrawl/cli"
+# Note: Firecrawl is an OpenClaw web search provider (tools.web.search).
+# It's configured via the OpenClaw config + FIRECRAWL_API_KEY env var.
+# No standalone CLI binary needed.
 
 # gcloud — Google Cloud CLI (large, installs to /data/google-cloud-sdk)
 if ! command -v gcloud &>/dev/null && [ ! -f /data/bin/gcloud ]; then
