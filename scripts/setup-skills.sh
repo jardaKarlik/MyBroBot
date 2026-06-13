@@ -22,10 +22,24 @@ install_gh_bin() {
 }
 
 install_npm_global() {
-  local pkg="$1"
+  local pkg="$1" allow_scripts="$2"
   if command -v "$pkg" &>/dev/null; then echo "[setup] $pkg already installed, skipping"; return; fi
   echo "[setup] Installing $pkg via npm..."
-  npm install -g "$pkg"
+  if [ -n "$allow_scripts" ]; then
+    npm install -g --allow-scripts="$allow_scripts" "$pkg"
+  else
+    npm install -g "$pkg"
+  fi
+}
+
+# Map dpkg arch to Google's tarball arch naming
+gcloud_arch() {
+  local a; a=$(dpkg --print-architecture)
+  case "$a" in
+    amd64)  echo "x86_64" ;;
+    arm64)  echo "arm64"  ;;
+    *)      echo "$a"     ;;
+  esac
 }
 
 # ── existing tools ───────────────────────────────────────────────────────────
@@ -44,8 +58,8 @@ install_npm_global "mcporter"
 # gh — GitHub CLI
 install_gh_bin "cli/cli" "v2.89.0" "gh" "gh_2.89.0_linux_ARCH.tar.gz"
 
-# railway — Railway CLI (npm)
-install_npm_global "@railway/cli"
+# railway — Railway CLI (npm, needs allow-scripts for postinstall)
+install_npm_global "@railway/cli" "@railway/cli"
 
 # composio — Composio agentic tooling platform
 install_npm_global "composio"
@@ -60,7 +74,7 @@ install_npm_global "skillfish"
 # gcloud — Google Cloud CLI (large, installs to /data/google-cloud-sdk)
 if ! command -v gcloud &>/dev/null && [ ! -f /data/bin/gcloud ]; then
   echo "[setup] Installing gcloud CLI..."
-  ARCH=$(dpkg --print-architecture)
+  ARCH=$(gcloud_arch)
   curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${ARCH}.tar.gz" \
     | tar -xz -C /tmp
   /tmp/google-cloud-sdk/install.sh --quiet --install-directory=/data/google-cloud-sdk --additional-components alpha beta
