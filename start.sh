@@ -5,13 +5,11 @@ set -euo pipefail
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-${OPENCLAW_STATE_DIR:-/home/node/.openclaw}}"
 PORT="${PORT:-18789}"
 
-# Clean up corrupt config on startup (to recover from config errors)
+# Force config regeneration if it exists (recover from any corruption)
+# This ensures fresh config with valid settings on every deployment
 if [ -f "$CONFIG_DIR/openclaw.json" ]; then
-    if ! grep -q '"brave"\|"perplexity"\|"grok"\|"gemini"\|"kimi"' "$CONFIG_DIR/openclaw.json" 2>/dev/null || \
-       grep -q 'web.search.provider.*openrouter' "$CONFIG_DIR/openclaw.json" 2>/dev/null; then
-        echo "[openclaw-init] Invalid or corrupted config detected; removing for regeneration..."
-        rm -f "$CONFIG_DIR/openclaw.json"
-    fi
+    echo "[openclaw-init] Regenerating config from defaults..."
+    rm -f "$CONFIG_DIR/openclaw.json"
 fi
 
 # ── First-boot initialization ──────────────────────────────────────────────
