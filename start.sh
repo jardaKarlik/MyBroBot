@@ -6,9 +6,12 @@ CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-${OPENCLAW_STATE_DIR:-/home/node/.openclaw}}"
 PORT="${PORT:-18789}"
 
 # Clean up corrupt config on startup (to recover from config errors)
-if [ -f "$CONFIG_DIR/openclaw.json" ] && grep -q '"provider".*"openrouter"' "$CONFIG_DIR/openclaw.json" 2>/dev/null; then
-    echo "[openclaw-init] Invalid web.search provider detected; removing config for regeneration..."
-    rm -f "$CONFIG_DIR/openclaw.json"
+if [ -f "$CONFIG_DIR/openclaw.json" ]; then
+    if ! grep -q '"brave"\|"perplexity"\|"grok"\|"gemini"\|"kimi"' "$CONFIG_DIR/openclaw.json" 2>/dev/null || \
+       grep -q 'web.search.provider.*openrouter' "$CONFIG_DIR/openclaw.json" 2>/dev/null; then
+        echo "[openclaw-init] Invalid or corrupted config detected; removing for regeneration..."
+        rm -f "$CONFIG_DIR/openclaw.json"
+    fi
 fi
 
 # ── First-boot initialization ──────────────────────────────────────────────
