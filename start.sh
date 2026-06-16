@@ -5,11 +5,21 @@ set -euo pipefail
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-${OPENCLAW_STATE_DIR:-/home/node/.openclaw}}"
 PORT="${PORT:-18789}"
 
-# Force config regeneration if it exists (recover from any corruption)
-# This ensures fresh config with valid settings on every deployment
+# Recover from corrupted config by restoring from backup
 if [ -f "$CONFIG_DIR/openclaw.json" ]; then
-    echo "[openclaw-init] Regenerating config from defaults..."
-    rm -f "$CONFIG_DIR/openclaw.json"
+    # Check if config is valid (contains a valid web.search.provider)
+    if ! grep -q '"provider"[[:space:]]*:[[:space:]]*"\(brave\|perplexity\|grok\|gemini\|kimi\)"' "$CONFIG_DIR/openclaw.json" 2>/dev/null; then
+        echo "[openclaw-init] Invalid config detected, attempting to restore from backup..."
+        # Find most recent backup and restore it
+        LATEST_BACKUP=$(ls -t "$CONFIG_DIR"/openclaw.json.bak* 2>/dev/null | head -1)
+        if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
+            echo "[openclaw-init] Restoring from backup: $LATEST_BACKUP"
+            cp "$LATEST_BACKUP" "$CONFIG_DIR/openclaw.json"
+        else
+            echo "[openclaw-init] No backup found, regenerating config..."
+            rm -f "$CONFIG_DIR/openclaw.json"
+        fi
+    fi
 fi
 
 # ── First-boot initialization ──────────────────────────────────────────────
