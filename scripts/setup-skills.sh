@@ -4,6 +4,23 @@
 # All tools land on the Railway volume (/data) and persist across redeploys.
 set -e
 
+# ── Recover from corrupted OpenClaw config ────────────────────────────────────
+CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-.clawdbot}"
+if [ -f "/data/$CONFIG_DIR/openclaw.json" ]; then
+    # Check if config has a valid web.search.provider
+    if ! grep -q '"provider"[[:space:]]*:[[:space:]]*"\(brave\|perplexity\|grok\|gemini\|kimi\)"' "/data/$CONFIG_DIR/openclaw.json" 2>/dev/null; then
+        echo "[setup] Invalid OpenClaw config detected, restoring from backup..."
+        LATEST_BACKUP=$(ls -t "/data/$CONFIG_DIR"/openclaw.json.bak* 2>/dev/null | head -1)
+        if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
+            echo "[setup] Restoring from: $LATEST_BACKUP"
+            cp "$LATEST_BACKUP" "/data/$CONFIG_DIR/openclaw.json"
+        else
+            echo "[setup] No backup found, removing corrupt config for regeneration..."
+            rm -f "/data/$CONFIG_DIR/openclaw.json"
+        fi
+    fi
+fi
+
 mkdir -p /data/bin /data/uv
 
 # ── helpers ──────────────────────────────────────────────────────────────────
