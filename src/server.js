@@ -413,6 +413,7 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
         <option value="openclaw.health">openclaw health</option>
         <option value="openclaw.doctor">openclaw doctor</option>
         <option value="openclaw.logs.tail">openclaw logs --tail N</option>
+        <option value="openclaw.logs.view">openclaw logs view (read log file)</option>
         <option value="openclaw.config.get">openclaw config get &lt;path&gt;</option>
         <option value="openclaw.version">openclaw --version</option>
         <option value="openclaw.devices.list">openclaw devices list</option>
@@ -979,6 +980,7 @@ const ALLOWED_CONSOLE_COMMANDS = new Set([
   "openclaw.health",
   "openclaw.doctor",
   "openclaw.logs.tail",
+  "openclaw.logs.view",
   "openclaw.config.get",
 
   // Device management (for fixing "disconnected (1008): pairing required")
@@ -1037,6 +1039,22 @@ app.post("/setup/api/console/run", requireSetupAuth, async (req, res) => {
       const lines = Math.max(50, Math.min(1000, Number.parseInt(arg || "200", 10) || 200));
       const r = await runCmd(OPENCLAW_NODE, clawArgs(["logs", "--tail", String(lines)]));
       return res.status(r.code === 0 ? 200 : 500).json({ ok: r.code === 0, output: redactSecrets(r.output) });
+    }
+    if (cmd === "openclaw.logs.view") {
+      const dir = "/tmp/openclaw";
+      if (!fs.existsSync(dir)) {
+        return res.status(404).json({ ok: false, error: `Directory ${dir} does not exist` });
+      }
+      const files = fs.readdirSync(dir).filter(f => f.endsWith(".log")).sort();
+      if (files.length === 0) {
+        return res.status(404).json({ ok: false, error: `No log files found in ${dir}` });
+      }
+      const latestFile = path.join(dir, files[files.length - 1]);
+      const content = fs.readFileSync(latestFile, "utf8");
+      const lines = content.split("\n");
+      const numLines = Math.max(50, Math.min(1000, Number.parseInt(arg || "200", 10) || 200));
+      const tail = lines.slice(-numLines).join("\n");
+      return res.json({ ok: true, output: redactSecrets(tail) });
     }
     if (cmd === "openclaw.config.get") {
       if (!arg) return res.status(400).json({ ok: false, error: "Missing config path" });
