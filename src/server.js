@@ -973,6 +973,7 @@ const ALLOWED_CONSOLE_COMMANDS = new Set([
   "gateway.restart",
   "gateway.stop",
   "gateway.start",
+  "gateway.test.responses",
 
   // OpenClaw CLI helpers
   "openclaw.version",
@@ -1017,6 +1018,33 @@ app.post("/setup/api/console/run", requireSetupAuth, async (req, res) => {
     if (cmd === "gateway.start") {
       const r = await ensureGatewayRunning();
       return res.json({ ok: Boolean(r.ok), output: r.ok ? "Gateway started.\n" : `Gateway not started: ${r.reason}\n` });
+    }
+    if (cmd === "gateway.test.responses") {
+      try {
+        const url = `${GATEWAY_TARGET}/v1/responses`;
+        const headers = {
+          "Content-Type": "application/json",
+        };
+        if (OPENCLAW_GATEWAY_TOKEN) {
+          headers["Authorization"] = `Bearer ${OPENCLAW_GATEWAY_TOKEN}`;
+        }
+        const body = JSON.stringify({
+          model: "main",
+          input: arg || "Hello, are you there?",
+        });
+        const response = await fetch(url, {
+          method: "POST",
+          headers,
+          body,
+        });
+        const text = await response.text();
+        return res.json({
+          ok: response.ok,
+          output: `Status: ${response.status}\nResponse: ${text}`,
+        });
+      } catch (err) {
+        return res.json({ ok: false, output: `Fetch error: ${String(err)}` });
+      }
     }
 
     if (cmd === "openclaw.version") {
