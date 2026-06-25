@@ -35,11 +35,15 @@ export async function runAgent(prompt, metadata = {}) {
     `[OpenClaw] Prompt preview: ${prompt.substring(0, 200)}${prompt.length > 200 ? "..." : ""}`
   );
 
+  const authHeader = config.openclaw.apiToken.startsWith("Basic ") || config.openclaw.apiToken.startsWith("Bearer ")
+    ? config.openclaw.apiToken
+    : `Bearer ${config.openclaw.apiToken}`;
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${config.openclaw.apiToken}`,
+      Authorization: authHeader,
     },
     body: JSON.stringify(requestBody),
     // Allow longer timeout for agent processing (5 minutes)
@@ -96,9 +100,13 @@ export async function runAgent(prompt, metadata = {}) {
  */
 export async function healthCheck() {
   try {
+    const authHeader = config.openclaw.apiToken.startsWith("Basic ") || config.openclaw.apiToken.startsWith("Bearer ")
+      ? config.openclaw.apiToken
+      : `Bearer ${config.openclaw.apiToken}`;
+
     const response = await fetch(`${config.openclaw.url}/health`, {
       headers: {
-        Authorization: `Bearer ${config.openclaw.apiToken}`,
+        Authorization: authHeader,
       },
       signal: AbortSignal.timeout(10_000),
     });
