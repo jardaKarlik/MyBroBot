@@ -148,11 +148,19 @@ async function processTask(taskId) {
       `✅ Ready for review.`;
 
     await clickup.addComment(taskId, commentBody);
-    await clickup.updateTaskStatus(taskId, config.statuses.review);
-
-    console.log(
-      `[Process] ✅ Task ${taskId} completed in ${elapsed}s, status → "${config.statuses.review}"`
-    );
+    
+    try {
+      await clickup.updateTaskStatus(taskId, config.statuses.review);
+      console.log(
+        `[Process] ✅ Task ${taskId} completed in ${elapsed}s, status → "${config.statuses.review}"`
+      );
+    } catch (statusError) {
+      console.warn(`[Process] Failed to update status to "${config.statuses.review}":`, statusError.message);
+      await clickup.addComment(
+        taskId,
+        `⚠️ **Notice**: Could not update task status to **"${config.statuses.review}"** (it might not be enabled in this ClickUp List's settings).`
+      );
+    }
   } catch (error) {
     // 7. On error: post error comment and set status to "failed"
     console.error(`[Process] ❌ Task ${taskId} failed:`, error.message);
@@ -165,7 +173,15 @@ async function processTask(taskId) {
           `\`\`\`\n${error.message}\n\`\`\`\n\n` +
           `You can retry by setting the status back to **"${config.statuses.trigger}"**.`
       );
-      await clickup.updateTaskStatus(taskId, config.statuses.failed);
+      try {
+        await clickup.updateTaskStatus(taskId, config.statuses.failed);
+      } catch (statusError) {
+        console.warn(`[Process] Failed to update status to "${config.statuses.failed}":`, statusError.message);
+        await clickup.addComment(
+          taskId,
+          `⚠️ **Notice**: Could not update task status to **"${config.statuses.failed}"** (it might not be enabled in this ClickUp List's settings).`
+        );
+      }
     } catch (reportError) {
       console.error(
         `[Process] Failed to report error to ClickUp:`,
