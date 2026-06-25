@@ -1375,6 +1375,21 @@ proxy.on("error", (err, _req, res) => {
   }
 });
 
+proxy.on("proxyReq", (proxyReq, req, res, options) => {
+  attachGatewayAuthHeader(req);
+  if (req.headers.authorization) {
+    proxyReq.setHeader("Authorization", req.headers.authorization);
+  }
+
+  if (req.body && Object.keys(req.body).length > 0) {
+    const bodyData = JSON.stringify(req.body);
+    proxyReq.setHeader("Content-Type", "application/json");
+    proxyReq.setHeader("Content-Length", Buffer.byteLength(bodyData));
+    proxyReq.write(bodyData);
+  }
+});
+
+
 // --- Dashboard password protection ---
 // Require the same SETUP_PASSWORD for the entire Control UI dashboard,
 // not just the /setup routes.  Healthcheck is excluded so Railway probes work.
