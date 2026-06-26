@@ -974,6 +974,7 @@ const ALLOWED_CONSOLE_COMMANDS = new Set([
   "gateway.stop",
   "gateway.start",
   "gateway.test.responses",
+  "openclaw.auth.profiles.get",
 
   // OpenClaw CLI helpers
   "openclaw.version",
@@ -1044,6 +1045,19 @@ app.post("/setup/api/console/run", requireSetupAuth, async (req, res) => {
         });
       } catch (err) {
         return res.json({ ok: false, output: `Fetch error: ${String(err)}` });
+      }
+    }
+
+    if (cmd === "openclaw.auth.profiles.get") {
+      try {
+        const filePath = path.join(STATE_DIR, "agents/main/agent/auth-profiles.json");
+        if (!fs.existsSync(filePath)) {
+          return res.json({ ok: false, output: `File ${filePath} does not exist.` });
+        }
+        const data = fs.readFileSync(filePath, "utf8");
+        return res.json({ ok: true, output: redactSecrets(data) });
+      } catch (err) {
+        return res.json({ ok: false, output: `Error: ${String(err)}` });
       }
     }
 
