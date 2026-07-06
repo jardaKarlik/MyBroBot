@@ -1519,6 +1519,37 @@ const server = app.listen(PORT, "0.0.0.0", async () => {
     }
   }
 
+  // Sync API keys from environment variables to auth-profiles.json on every startup.
+  // This ensures the gateway always has the latest keys from Railway.
+  if (isConfigured()) {
+    try {
+      const authPath = path.join(STATE_DIR, "agents/main/agent/auth-profiles.json");
+      const authExists = fs.existsSync(authPath);
+      let auth = authExists ? JSON.parse(fs.readFileSync(authPath, "utf8")) : { version: 1, profiles: {} };
+      let changed = false;
+
+      // Sync Google API key
+      if (process.env.GOOGLE_API_KEY && (!auth.profiles["google:default"] || auth.profiles["google:default"].key !== process.env.GOOGLE_API_KEY)) {
+        auth.profiles["google:default"] = { type: "api_key", provider: "google", key: process.env.GOOGLE_API_KEY };
+        changed = true;
+      }
+
+      // Sync Anthropic API key
+      if (process.env.ANTHROPIC_API_KEY && (!auth.profiles["anthropic:default"] || auth.profiles["anthropic:default"].key !== process.env.ANTHROPIC_API_KEY)) {
+        auth.profiles["anthropic:default"] = { type: "api_key", provider: "anthropic", key: process.env.ANTHROPIC_API_KEY };
+        changed = true;
+      }
+
+      if (changed) {
+        fs.mkdirSync(path.dirname(authPath), { recursive: true });
+        fs.writeFileSync(authPath, JSON.stringify(auth, null, 2), "utf8");
+        console.log("[wrapper] API keys synced to auth-profiles.json");
+      }
+    } catch (err) {
+      console.warn(`[wrapper] failed to sync API keys: ${String(err)}`);
+    }
+  }
+
   // Auto-start the gateway if already configured so polling channels (Telegram/Discord/etc.)
   // work even if nobody visits the web UI.
   if (isConfigured()) {
