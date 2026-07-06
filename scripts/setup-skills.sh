@@ -51,8 +51,8 @@ if [ ! -f "$CONFIG_PATH" ]; then
   mkdir -p "/data/$CONFIG_DIR/agents/main/agent"
 
   CONFIG_PATH="$CONFIG_PATH" GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:?Gateway token required}" \
-    ANTHROPIC_KEY="${ANTHROPIC_API_KEY:?Anthropic API key required}" \
-    GOOGLE_KEY="${GOOGLE_API_KEY:?Google API key required}" \
+    ANTHROPIC_KEY="${ANTHROPIC_API_KEY:-}" \
+    GOOGLE_KEY="${GOOGLE_API_KEY:-}" \
     node << 'INIT_EOF'
 const fs = require('fs');
 const path = require('path');
