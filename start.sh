@@ -5,33 +5,32 @@ set -euo pipefail
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-${OPENCLAW_STATE_DIR:-/home/node/.openclaw}}"
 PORT="${PORT:-18789}"
 
-# Recover from corrupted config by restoring from backup
+# Recover from corrupted config by patching broken fields
 if [ -f "$CONFIG_DIR/openclaw.json" ]; then
-    # Check if config is valid (contains a valid web.search.provider)
-    if node -e "
-const fs=require('fs');
-try{
-  const c=JSON.parse(fs.readFileSync('$CONFIG_DIR/openclaw.json','utf8'));
-  const hasModels=c.models!==undefined;
-  const origins=c.gateway?.controlUi?.allowedOrigins;
-  const originsValid=Array.isArray(origins)&&origins.includes('*');
-  if(hasModels||!originsValid)process.exit(0);
-}catch(e){}
-process.exit(1);
-" 2>/dev/null; then
-        echo "[openclaw-init] Patching config (removing models field, setting allowedOrigins)..."
-        node -e "
-const fs=require('fs');
-try{
-  const c=JSON.parse(fs.readFileSync('$CONFIG_DIR/openclaw.json','utf8'));
-  if(c.models)delete c.models;
-  if(!c.gateway)c.gateway={};
-  if(!c.gateway.controlUi)c.gateway.controlUi={};
-  c.gateway.controlUi.allowedOrigins=['*'];
-  fs.writeFileSync('$CONFIG_DIR/openclaw.json',JSON.stringify(c,null,2));
-}catch(e){console.error(e);}
-" 2>/dev/null
-    fi
+    CONFIG_PATH="$CONFIG_DIR/openclaw.json" node << 'PATCH_EOF'
+const fs = require('fs');
+const configPath = process.env.CONFIG_PATH;
+try {
+  const c = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const hasModels = c.models !== undefined;
+  const origins = c.gateway?.controlUi?.allowedOrigins;
+  const originsValid = Array.isArray(origins) && origins.includes('*');
+
+  if (hasModels || !originsValid) {
+    console.log('[openclaw-init] Patching config...');
+    if (c.models) delete c.models;
+    if (!c.gateway) c.gateway = {};
+    if (!c.gateway.controlUi) c.gateway.controlUi = {};
+    c.gateway.controlUi.allowedOrigins = ['*'];
+    const backup = configPath + '.bak.' + Date.now();
+    fs.writeFileSync(backup, JSON.stringify(c, null, 2));
+    fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
+    console.log('[openclaw-init] Config patched and saved.');
+  }
+} catch (e) {
+  console.error('[openclaw-init] Patch failed:', e.message);
+}
+PATCH_EOF
 fi
 
 # ── First-boot initialization ──────────────────────────────────────────────

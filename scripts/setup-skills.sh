@@ -6,37 +6,42 @@ set -e
 
 # ── Patch incompatible config fields (don't regenerate, just fix) ──
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-.clawdbot}"
-if [ -f "/data/$CONFIG_DIR/openclaw.json" ]; then
-    node -e "
+CONFIG_PATH="/data/$CONFIG_DIR/openclaw.json"
+if [ -f "$CONFIG_PATH" ]; then
+    CONFIG_PATH="$CONFIG_PATH" node << 'PATCH_EOF'
 const fs = require('fs');
+const configPath = process.env.CONFIG_PATH;
 try {
-  const c = JSON.parse(fs.readFileSync('/data/$CONFIG_DIR/openclaw.json', 'utf8'));
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   let changed = false;
 
-  if (c.models !== undefined) {
+  if (config.models !== undefined) {
     console.log('[setup] Removing invalid top-level models field...');
-    delete c.models;
+    delete config.models;
     changed = true;
   }
 
-  if (!c.gateway) c.gateway = {};
-  if (!c.gateway.controlUi) c.gateway.controlUi = {};
-  const origins = c.gateway.controlUi.allowedOrigins;
+  if (!config.gateway) config.gateway = {};
+  if (!config.gateway.controlUi) config.gateway.controlUi = {};
+  const origins = config.gateway.controlUi.allowedOrigins;
   if (!Array.isArray(origins) || !origins.includes('*')) {
-    console.log('[setup] Setting allowedOrigins to [\"*\"]...');
-    c.gateway.controlUi.allowedOrigins = ['*'];
+    console.log('[setup] Setting allowedOrigins to ["*"]...');
+    config.gateway.controlUi.allowedOrigins = ['*'];
     changed = true;
   }
 
   if (changed) {
-    fs.writeFileSync('/data/$CONFIG_DIR/openclaw.json.bak.\$(date +%s)', JSON.stringify(c, null, 2), 'utf8');
-    fs.writeFileSync('/data/$CONFIG_DIR/openclaw.json', JSON.stringify(c, null, 2), 'utf8');
-    console.log('[setup] Config patched.');
+    const backupPath = configPath + '.bak.' + Date.now();
+    fs.writeFileSync(backupPath, JSON.stringify(config, null, 2), 'utf8');
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    console.log('[setup] Config patched and saved to volume.');
+  } else {
+    console.log('[setup] Config already valid.');
   }
 } catch (e) {
   console.error('[setup] Config patch failed:', e.message);
 }
-" 2>&1 | grep -E '^\[setup\]'
+PATCH_EOF
 fi
 
 mkdir -p /data/bin /data/uv
