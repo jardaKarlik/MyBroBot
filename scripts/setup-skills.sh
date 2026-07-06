@@ -86,12 +86,15 @@ const config = {
     defaults: {
       workspace: path.dirname(configPath) + '/workspace',
       models: {
-        'anthropic/claude-opus-4-7': {},
-        'anthropic/claude-opus-4-5': {},
-        'google/gemini-2.5-flash': {},
-        'google/gemini-2.0-flash': {}
+        'anthropic/claude-opus-4-8': { alias: 'Claude 4.8' },
+        'anthropic/claude-opus-4-7': { alias: 'Claude 4.7' },
+        'anthropic/claude-opus-4-5': { alias: 'Claude 4.5' },
+        'anthropic/claude-sonnet-4-5': { alias: 'Sonnet 4.5' },
+        'anthropic/claude-haiku-4-5': { alias: 'Haiku 4.5' },
+        'google/gemini-2.5-flash': { alias: 'Gemini 2.5 Flash' },
+        'google/gemini-2.0-flash': { alias: 'Gemini 2.0 Flash' }
       },
-      model: { primary: 'google/gemini-2.5-flash' }
+      model: { primary: 'anthropic/claude-opus-4-8' }
     }
   },
   gateway: {
