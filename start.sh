@@ -99,7 +99,7 @@ if [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
     },
     "web": {
       "search": {
-        "provider": "brave",
+        "provider": "gemini",
         "enabled": true
       }
     }

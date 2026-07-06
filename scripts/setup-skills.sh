@@ -105,7 +105,7 @@ const config = {
     },
     web: {
       search: {
-        provider: 'brave',
+        provider: 'gemini',
         enabled: true
       }
     }
