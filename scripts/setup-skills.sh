@@ -105,7 +105,7 @@ const config = {
     },
     web: {
       search: {
-        provider: 'firecrawl',
+        provider: 'brave',
         enabled: true
       }
     }
