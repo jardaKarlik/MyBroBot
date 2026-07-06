@@ -4,20 +4,19 @@
 # All tools land on the Railway volume (/data) and persist across redeploys.
 set -e
 
-# ── Recover from corrupted OpenClaw config ────────────────────────────────────
+# ── Remove config with top-level "models" field (invalid in OpenClaw v2026.3.8) ──
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-.clawdbot}"
 if [ -f "/data/$CONFIG_DIR/openclaw.json" ]; then
-    # Check if config has a valid web.search.provider
-    if ! grep -q '"provider"[[:space:]]*:[[:space:]]*"\(brave\|perplexity\|grok\|gemini\|kimi\)"' "/data/$CONFIG_DIR/openclaw.json" 2>/dev/null; then
-        echo "[setup] Invalid OpenClaw config detected, restoring from backup..."
-        LATEST_BACKUP=$(ls -t "/data/$CONFIG_DIR"/openclaw.json.bak* 2>/dev/null | head -1)
-        if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
-            echo "[setup] Restoring from: $LATEST_BACKUP"
-            cp "$LATEST_BACKUP" "/data/$CONFIG_DIR/openclaw.json"
-        else
-            echo "[setup] No backup found, removing corrupt config for regeneration..."
-            rm -f "/data/$CONFIG_DIR/openclaw.json"
-        fi
+    if node -e "
+const fs = require('fs');
+try {
+  const c = JSON.parse(fs.readFileSync('/data/$CONFIG_DIR/openclaw.json', 'utf8'));
+  process.exit(c.models !== undefined ? 0 : 1);
+} catch (e) { process.exit(1); }
+" 2>/dev/null; then
+        echo "[setup] Invalid top-level 'models' field detected in config, removing..."
+        cp "/data/$CONFIG_DIR/openclaw.json" "/data/$CONFIG_DIR/openclaw.json.bak.$(date +%s)" 2>/dev/null || true
+        rm -f "/data/$CONFIG_DIR/openclaw.json"
     fi
 fi
 

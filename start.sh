@@ -8,7 +8,11 @@ PORT="${PORT:-18789}"
 # Recover from corrupted config by restoring from backup
 if [ -f "$CONFIG_DIR/openclaw.json" ]; then
     # Check if config is valid (contains a valid web.search.provider)
-    if ! grep -q '"provider"[[:space:]]*:[[:space:]]*"\(brave\|perplexity\|grok\|gemini\|kimi\)"' "$CONFIG_DIR/openclaw.json" 2>/dev/null; then
+    if node -e "
+const fs=require('fs');
+try{const c=JSON.parse(fs.readFileSync('$CONFIG_DIR/openclaw.json','utf8'));process.exit(c.models!==undefined?0:1);}
+catch(e){process.exit(1);}
+" 2>/dev/null; then
         echo "[openclaw-init] Invalid config detected, attempting to restore from backup..."
         # Find most recent backup and restore it
         LATEST_BACKUP=$(ls -t "$CONFIG_DIR"/openclaw.json.bak* 2>/dev/null | head -1)
@@ -150,10 +154,6 @@ if [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
       }
     }
   },
-  "models": {
-    "mode": "replace",
-    "providers": {}
-  }
 }
 EOF
 

@@ -78,7 +78,7 @@ RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /openclaw/dist/entry.js "$@"'
   && chmod +x /usr/local/bin/openclaw
 
 # Invalidate cache to force re-copy of scripts
-ARG CACHE_BUST=1
+ARG CACHE_BUST=2
 COPY src ./src
 COPY scripts ./scripts
 RUN chmod +x /app/scripts/setup-skills.sh
