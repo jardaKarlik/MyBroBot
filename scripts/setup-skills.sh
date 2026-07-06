@@ -44,6 +44,163 @@ try {
 PATCH_EOF
 fi
 
+# ── First-boot: generate config if missing ──────────────────────────────────
+if [ ! -f "$CONFIG_PATH" ]; then
+  echo "[setup] First boot: generating config from template..."
+
+  mkdir -p "/data/$CONFIG_DIR/agents/main/agent"
+
+  CONFIG_PATH="$CONFIG_PATH" GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:?Gateway token required}" \
+    ANTHROPIC_KEY="${ANTHROPIC_API_KEY:?Anthropic API key required}" \
+    GOOGLE_KEY="${GOOGLE_API_KEY:?Google API key required}" \
+    node << 'INIT_EOF'
+const fs = require('fs');
+const path = require('path');
+const configPath = process.env.CONFIG_PATH;
+const gatewayToken = process.env.GATEWAY_TOKEN;
+const anthropicKey = process.env.ANTHROPIC_KEY;
+const googleKey = process.env.GOOGLE_KEY;
+
+const config = {
+  agents: {
+    defaults: {
+      workspace: path.dirname(configPath) + '/workspace',
+      models: {
+        'anthropic/claude-opus-4-7': {},
+        'anthropic/claude-opus-4-5': {},
+        'google/gemini-2.5-flash': {},
+        'google/gemini-2.0-flash': {}
+      },
+      model: { primary: 'google/gemini-2.5-flash' }
+    }
+  },
+  gateway: {
+    mode: 'local',
+    port: 18789,
+    bind: 'loopback',
+    controlUi: {
+      allowInsecureAuth: true,
+      allowedOrigins: ['*']
+    },
+    nodes: {
+      denyCommands: [
+        'camera.snap', 'camera.clip', 'screen.record',
+        'contacts.add', 'calendar.add', 'reminders.add',
+        'sms.send', 'sms.search'
+      ]
+    },
+    auth: {
+      mode: 'token',
+      token: gatewayToken
+    }
+  },
+  session: { dmScope: 'per-channel-peer' },
+  tools: {
+    profile: 'coding',
+    exec: {
+      host: 'gateway',
+      security: 'full',
+      ask: 'off',
+      timeoutSec: 1800
+    },
+    web: {
+      search: {
+        provider: 'firecrawl',
+        enabled: true
+      }
+    }
+  },
+  auth: {
+    profiles: {
+      'anthropic:default': {
+        provider: 'anthropic',
+        mode: 'api_key'
+      }
+    }
+  },
+  channels: {
+    whatsapp: {
+      selfChatMode: true,
+      dmPolicy: 'allowlist',
+      allowFrom: ['+420734740997'],
+      enabled: true
+    }
+  },
+  plugins: {
+    entries: {
+      bonjour: { enabled: false },
+      firecrawl: {
+        enabled: true,
+        config: {
+          webSearch: {
+            apiKey: process.env.FIRECRAWL_API_KEY || ''
+          }
+        }
+      },
+      anthropic: { enabled: true },
+      google: { enabled: true },
+      'openclaw-mem0': {
+        enabled: true,
+        config: {
+          mode: 'platform',
+          apiKey: process.env.MEM0_API_KEY || '',
+          userId: 'default-user'
+        }
+      }
+    }
+  },
+  skills: {
+    install: { nodeManager: 'npm' },
+    entries: {
+      goplaces: { apiKey: process.env.GOOGLE_PLACES_API_KEY || '' },
+      '1password': { enabled: false },
+      'apple-reminders': { enabled: false },
+      'apple-notes': { enabled: false },
+      oracle: { enabled: false }
+    }
+  },
+  hooks: {
+    internal: {
+      enabled: true,
+      entries: {
+        'session-memory': { enabled: true }
+      }
+    }
+  }
+};
+
+const authProfiles = {
+  version: 1,
+  profiles: {
+    'anthropic:default': {
+      type: 'api_key',
+      provider: 'anthropic',
+      key: anthropicKey
+    },
+    'google:default': {
+      type: 'api_key',
+      provider: 'google',
+      key: googleKey
+    }
+  }
+};
+
+try {
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+  const authDir = path.join(path.dirname(configPath), 'agents/main/agent');
+  fs.mkdirSync(authDir, { recursive: true });
+  fs.writeFileSync(path.join(authDir, 'auth-profiles.json'), JSON.stringify(authProfiles, null, 2), 'utf8');
+
+  console.log('[setup] Config generated and saved to volume.');
+} catch (e) {
+  console.error('[setup] Config generation failed:', e.message);
+  process.exit(1);
+}
+INIT_EOF
+fi
+
 mkdir -p /data/bin /data/uv
 
 # ── helpers ──────────────────────────────────────────────────────────────────
