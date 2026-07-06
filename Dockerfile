@@ -77,11 +77,12 @@ COPY --from=openclaw-build /openclaw /openclaw
 RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /openclaw/dist/entry.js "$@"' > /usr/local/bin/openclaw \
   && chmod +x /usr/local/bin/openclaw
 
-# Invalidate cache to force re-copy of scripts. Must increment to rebuild layers.
-ARG CACHE_BUST=4
+# Force clean rebuild — DO NOT USE CACHED LAYERS
+# (buildkit cache busting: 2026-07-06-20:58)
+ARG CACHE_BUST=5
 COPY src ./src
 COPY scripts ./scripts
-RUN chmod +x /app/scripts/setup-skills.sh
+RUN chmod +x /app/scripts/setup-skills.sh && ls -la /app/scripts/
 
 # The wrapper listens on $PORT.
 # IMPORTANT: Do not set a default PORT here.
