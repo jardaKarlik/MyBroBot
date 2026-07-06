@@ -4,25 +4,39 @@
 # All tools land on the Railway volume (/data) and persist across redeploys.
 set -e
 
-# ── Detect incompatible config and remove for regeneration ──
+# ── Patch incompatible config fields (don't regenerate, just fix) ──
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-.clawdbot}"
 if [ -f "/data/$CONFIG_DIR/openclaw.json" ]; then
-    if node -e "
+    node -e "
 const fs = require('fs');
 try {
   const c = JSON.parse(fs.readFileSync('/data/$CONFIG_DIR/openclaw.json', 'utf8'));
-  const hasModels = c.models !== undefined;
-  const origins = c.gateway?.controlUi?.allowedOrigins;
-  const originsValid = Array.isArray(origins) && origins.includes('*');
-  if (hasModels) { console.log('has-invalid-models'); process.exit(0); }
-  if (!originsValid) { console.log('has-restrictive-origins'); process.exit(0); }
-  process.exit(1);
-} catch (e) { process.exit(1); }
-" 2>/dev/null; then
-        echo "[setup] Incompatible config detected (invalid models or restrictive CORS), regenerating..."
-        cp "/data/$CONFIG_DIR/openclaw.json" "/data/$CONFIG_DIR/openclaw.json.bak.$(date +%s)" 2>/dev/null || true
-        rm -f "/data/$CONFIG_DIR/openclaw.json"
-    fi
+  let changed = false;
+
+  if (c.models !== undefined) {
+    console.log('[setup] Removing invalid top-level models field...');
+    delete c.models;
+    changed = true;
+  }
+
+  if (!c.gateway) c.gateway = {};
+  if (!c.gateway.controlUi) c.gateway.controlUi = {};
+  const origins = c.gateway.controlUi.allowedOrigins;
+  if (!Array.isArray(origins) || !origins.includes('*')) {
+    console.log('[setup] Setting allowedOrigins to [\"*\"]...');
+    c.gateway.controlUi.allowedOrigins = ['*'];
+    changed = true;
+  }
+
+  if (changed) {
+    fs.writeFileSync('/data/$CONFIG_DIR/openclaw.json.bak.\$(date +%s)', JSON.stringify(c, null, 2), 'utf8');
+    fs.writeFileSync('/data/$CONFIG_DIR/openclaw.json', JSON.stringify(c, null, 2), 'utf8');
+    console.log('[setup] Config patched.');
+  }
+} catch (e) {
+  console.error('[setup] Config patch failed:', e.message);
+}
+" 2>&1 | grep -E '^\[setup\]'
 fi
 
 mkdir -p /data/bin /data/uv

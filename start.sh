@@ -15,19 +15,22 @@ try{
   const hasModels=c.models!==undefined;
   const origins=c.gateway?.controlUi?.allowedOrigins;
   const originsValid=Array.isArray(origins)&&origins.includes('*');
-  process.exit((hasModels||!originsValid)?0:1);
-}catch(e){process.exit(1);}
+  if(hasModels||!originsValid)process.exit(0);
+}catch(e){}
+process.exit(1);
 " 2>/dev/null; then
-        echo "[openclaw-init] Invalid config detected, attempting to restore from backup..."
-        # Find most recent backup and restore it
-        LATEST_BACKUP=$(ls -t "$CONFIG_DIR"/openclaw.json.bak* 2>/dev/null | head -1)
-        if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
-            echo "[openclaw-init] Restoring from backup: $LATEST_BACKUP"
-            cp "$LATEST_BACKUP" "$CONFIG_DIR/openclaw.json"
-        else
-            echo "[openclaw-init] No backup found, regenerating config..."
-            rm -f "$CONFIG_DIR/openclaw.json"
-        fi
+        echo "[openclaw-init] Patching config (removing models field, setting allowedOrigins)..."
+        node -e "
+const fs=require('fs');
+try{
+  const c=JSON.parse(fs.readFileSync('$CONFIG_DIR/openclaw.json','utf8'));
+  if(c.models)delete c.models;
+  if(!c.gateway)c.gateway={};
+  if(!c.gateway.controlUi)c.gateway.controlUi={};
+  c.gateway.controlUi.allowedOrigins=['*'];
+  fs.writeFileSync('$CONFIG_DIR/openclaw.json',JSON.stringify(c,null,2));
+}catch(e){console.error(e);}
+" 2>/dev/null
     fi
 fi
 
