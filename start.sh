@@ -10,8 +10,13 @@ if [ -f "$CONFIG_DIR/openclaw.json" ]; then
     # Check if config is valid (contains a valid web.search.provider)
     if node -e "
 const fs=require('fs');
-try{const c=JSON.parse(fs.readFileSync('$CONFIG_DIR/openclaw.json','utf8'));process.exit(c.models!==undefined?0:1);}
-catch(e){process.exit(1);}
+try{
+  const c=JSON.parse(fs.readFileSync('$CONFIG_DIR/openclaw.json','utf8'));
+  const hasModels=c.models!==undefined;
+  const origins=c.gateway?.controlUi?.allowedOrigins;
+  const originsValid=Array.isArray(origins)&&origins.includes('*');
+  process.exit((hasModels||!originsValid)?0:1);
+}catch(e){process.exit(1);}
 " 2>/dev/null; then
         echo "[openclaw-init] Invalid config detected, attempting to restore from backup..."
         # Find most recent backup and restore it

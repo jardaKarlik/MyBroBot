@@ -4,17 +4,22 @@
 # All tools land on the Railway volume (/data) and persist across redeploys.
 set -e
 
-# ── Remove config with top-level "models" field (invalid in OpenClaw v2026.3.8) ──
+# ── Detect incompatible config and remove for regeneration ──
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-.clawdbot}"
 if [ -f "/data/$CONFIG_DIR/openclaw.json" ]; then
     if node -e "
 const fs = require('fs');
 try {
   const c = JSON.parse(fs.readFileSync('/data/$CONFIG_DIR/openclaw.json', 'utf8'));
-  process.exit(c.models !== undefined ? 0 : 1);
+  const hasModels = c.models !== undefined;
+  const origins = c.gateway?.controlUi?.allowedOrigins;
+  const originsValid = Array.isArray(origins) && origins.includes('*');
+  if (hasModels) { console.log('has-invalid-models'); process.exit(0); }
+  if (!originsValid) { console.log('has-restrictive-origins'); process.exit(0); }
+  process.exit(1);
 } catch (e) { process.exit(1); }
 " 2>/dev/null; then
-        echo "[setup] Invalid top-level 'models' field detected in config, removing..."
+        echo "[setup] Incompatible config detected (invalid models or restrictive CORS), regenerating..."
         cp "/data/$CONFIG_DIR/openclaw.json" "/data/$CONFIG_DIR/openclaw.json.bak.$(date +%s)" 2>/dev/null || true
         rm -f "/data/$CONFIG_DIR/openclaw.json"
     fi
