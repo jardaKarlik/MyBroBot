@@ -30,6 +30,15 @@ try {
     changed = true;
   }
 
+  if (!config.tools) config.tools = {};
+  if (!config.tools.web) config.tools.web = {};
+  if (!config.tools.web.search) config.tools.web.search = {};
+  if (config.tools.web.search.provider !== 'gemini') {
+    console.log('[setup] Updating web search provider to gemini...');
+    config.tools.web.search.provider = 'gemini';
+    changed = true;
+  }
+
   if (changed) {
     const backupPath = configPath + '.bak.' + Date.now();
     fs.writeFileSync(backupPath, JSON.stringify(config, null, 2), 'utf8');
