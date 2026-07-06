@@ -77,8 +77,8 @@ COPY --from=openclaw-build /openclaw /openclaw
 RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /openclaw/dist/entry.js "$@"' > /usr/local/bin/openclaw \
   && chmod +x /usr/local/bin/openclaw
 
-# Invalidate cache to force re-copy of scripts
-ARG CACHE_BUST=2
+# Invalidate cache to force re-copy of scripts. Must increment to rebuild layers.
+ARG CACHE_BUST=3
 COPY src ./src
 COPY scripts ./scripts
 RUN chmod +x /app/scripts/setup-skills.sh
