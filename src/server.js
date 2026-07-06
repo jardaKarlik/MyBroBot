@@ -148,15 +148,25 @@ function sleep(ms) {
 }
 
 async function waitForGatewayReady(opts = {}) {
-  const timeoutMs = opts.timeoutMs ?? 20_000;
+  const timeoutMs = opts.timeoutMs ?? 30_000;
   const start = Date.now();
+  const net = require("net");
+
   while (Date.now() - start < timeoutMs) {
     try {
-      // Check if gateway process is still running and listening
-      if (gatewayProc && !gatewayProc.killed) {
-        // Gateway is running; assume it's ready after startup logs appear
-        return true;
-      }
+      // Check if port 18789 is actually open (gateway listening)
+      const connected = await new Promise((resolve) => {
+        const sock = net.createConnection({ host: "127.0.0.1", port: 18789, timeout: 1000 });
+        sock.on("connect", () => {
+          sock.destroy();
+          resolve(true);
+        });
+        sock.on("error", () => {
+          sock.destroy();
+          resolve(false);
+        });
+      });
+      if (connected) return true;
     } catch {
       // not ready
     }
