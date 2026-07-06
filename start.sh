@@ -121,27 +121,7 @@ if [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
     }
   },
   "plugins": {
-    "entries": {
-      "bonjour": { "enabled": false },
-      "firecrawl": {
-        "enabled": true,
-        "config": {
-          "webSearch": {
-            "apiKey": "${FIRECRAWL_API_KEY:-}"
-          }
-        }
-      },
-      "anthropic": { "enabled": true },
-      "google": { "enabled": true },
-      "openclaw-mem0": {
-        "enabled": true,
-        "config": {
-          "mode": "platform",
-          "apiKey": "${MEM0_API_KEY:-}",
-          "userId": "default-user"
-        }
-      }
-    }
+    "entries": {}
   },
   "skills": {
     "install": { "nodeManager": "npm" },

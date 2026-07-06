@@ -39,6 +39,17 @@ try {
     changed = true;
   }
 
+  if (config.plugins && config.plugins.entries) {
+    const stalePlugins = ['bonjour', 'firecrawl', 'anthropic', 'google', 'openclaw-mem0'];
+    for (const plugin of stalePlugins) {
+      if (config.plugins.entries[plugin]) {
+        console.log('[setup] Removing stale plugin entry: ' + plugin);
+        delete config.plugins.entries[plugin];
+        changed = true;
+      }
+    }
+  }
+
   if (changed) {
     const backupPath = configPath + '.bak.' + Date.now();
     fs.writeFileSync(backupPath, JSON.stringify(config, null, 2), 'utf8');
@@ -136,27 +147,7 @@ const config = {
     }
   },
   plugins: {
-    entries: {
-      bonjour: { enabled: false },
-      firecrawl: {
-        enabled: true,
-        config: {
-          webSearch: {
-            apiKey: process.env.FIRECRAWL_API_KEY || ''
-          }
-        }
-      },
-      anthropic: { enabled: true },
-      google: { enabled: true },
-      'openclaw-mem0': {
-        enabled: true,
-        config: {
-          mode: 'platform',
-          apiKey: process.env.MEM0_API_KEY || '',
-          userId: 'default-user'
-        }
-      }
-    }
+    entries: {}
   },
   skills: {
     install: { nodeManager: 'npm' },
