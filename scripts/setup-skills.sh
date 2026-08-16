@@ -4,21 +4,204 @@
 # All tools land on the Railway volume (/data) and persist across redeploys.
 set -e
 
-# ── Recover from corrupted OpenClaw config ────────────────────────────────────
+# ── Patch incompatible config fields (don't regenerate, just fix) ──
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-.clawdbot}"
-if [ -f "/data/$CONFIG_DIR/openclaw.json" ]; then
-    # Check if config has a valid web.search.provider
-    if ! grep -q '"provider"[[:space:]]*:[[:space:]]*"\(brave\|perplexity\|grok\|gemini\|kimi\)"' "/data/$CONFIG_DIR/openclaw.json" 2>/dev/null; then
-        echo "[setup] Invalid OpenClaw config detected, restoring from backup..."
-        LATEST_BACKUP=$(ls -t "/data/$CONFIG_DIR"/openclaw.json.bak* 2>/dev/null | head -1)
-        if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
-            echo "[setup] Restoring from: $LATEST_BACKUP"
-            cp "$LATEST_BACKUP" "/data/$CONFIG_DIR/openclaw.json"
-        else
-            echo "[setup] No backup found, removing corrupt config for regeneration..."
-            rm -f "/data/$CONFIG_DIR/openclaw.json"
-        fi
-    fi
+CONFIG_PATH="/data/$CONFIG_DIR/openclaw.json"
+if [ -f "$CONFIG_PATH" ]; then
+    CONFIG_PATH="$CONFIG_PATH" node << 'PATCH_EOF'
+const fs = require('fs');
+const configPath = process.env.CONFIG_PATH;
+try {
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  let changed = false;
+
+  if (config.models !== undefined) {
+    console.log('[setup] Removing invalid top-level models field...');
+    delete config.models;
+    changed = true;
+  }
+
+  if (!config.gateway) config.gateway = {};
+  if (!config.gateway.controlUi) config.gateway.controlUi = {};
+  const origins = config.gateway.controlUi.allowedOrigins;
+  if (!Array.isArray(origins) || !origins.includes('*')) {
+    console.log('[setup] Setting allowedOrigins to ["*"]...');
+    config.gateway.controlUi.allowedOrigins = ['*'];
+    changed = true;
+  }
+
+  if (!config.tools) config.tools = {};
+  if (!config.tools.web) config.tools.web = {};
+  if (!config.tools.web.search) config.tools.web.search = {};
+  if (config.tools.web.search.provider !== 'gemini') {
+    console.log('[setup] Updating web search provider to gemini...');
+    config.tools.web.search.provider = 'gemini';
+    changed = true;
+  }
+
+  if (config.plugins && config.plugins.entries) {
+    const stalePlugins = ['bonjour', 'firecrawl', 'anthropic', 'google', 'openclaw-mem0'];
+    for (const plugin of stalePlugins) {
+      if (config.plugins.entries[plugin]) {
+        console.log('[setup] Removing stale plugin entry: ' + plugin);
+        delete config.plugins.entries[plugin];
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    const backupPath = configPath + '.bak.' + Date.now();
+    fs.writeFileSync(backupPath, JSON.stringify(config, null, 2), 'utf8');
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    console.log('[setup] Config patched and saved to volume.');
+  } else {
+    console.log('[setup] Config already valid.');
+  }
+} catch (e) {
+  console.error('[setup] Config patch failed:', e.message);
+}
+PATCH_EOF
+fi
+
+# ── First-boot: generate config if missing ──────────────────────────────────
+if [ ! -f "$CONFIG_PATH" ]; then
+  echo "[setup] First boot: generating config from template..."
+
+  mkdir -p "/data/$CONFIG_DIR/agents/main/agent"
+
+  CONFIG_PATH="$CONFIG_PATH" GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:?Gateway token required}" \
+    ANTHROPIC_KEY="${ANTHROPIC_API_KEY:-}" \
+    GOOGLE_KEY="${GOOGLE_API_KEY:-}" \
+    node << 'INIT_EOF'
+const fs = require('fs');
+const path = require('path');
+const configPath = process.env.CONFIG_PATH;
+const gatewayToken = process.env.GATEWAY_TOKEN;
+const anthropicKey = process.env.ANTHROPIC_KEY;
+const googleKey = process.env.GOOGLE_KEY;
+
+const config = {
+  agents: {
+    defaults: {
+      workspace: path.dirname(configPath) + '/workspace',
+      models: {
+        'anthropic/claude-opus-4-8': { alias: 'Claude 4.8' },
+        'anthropic/claude-opus-4-7': { alias: 'Claude 4.7' },
+        'anthropic/claude-opus-4-5': { alias: 'Claude 4.5' },
+        'anthropic/claude-sonnet-4-5': { alias: 'Sonnet 4.5' },
+        'anthropic/claude-haiku-4-5': { alias: 'Haiku 4.5' },
+        'google/gemini-2.5-flash': { alias: 'Gemini 2.5 Flash' },
+        'google/gemini-2.0-flash': { alias: 'Gemini 2.0 Flash' }
+      },
+      model: { primary: 'anthropic/claude-opus-4-8' }
+    }
+  },
+  gateway: {
+    mode: 'local',
+    port: 18789,
+    bind: 'loopback',
+    controlUi: {
+      allowInsecureAuth: true,
+      allowedOrigins: ['*']
+    },
+    nodes: {
+      denyCommands: [
+        'camera.snap', 'camera.clip', 'screen.record',
+        'contacts.add', 'calendar.add', 'reminders.add',
+        'sms.send', 'sms.search'
+      ]
+    },
+    auth: {
+      mode: 'token',
+      token: gatewayToken
+    }
+  },
+  session: { dmScope: 'per-channel-peer' },
+  tools: {
+    profile: 'coding',
+    exec: {
+      host: 'gateway',
+      security: 'full',
+      ask: 'off',
+      timeoutSec: 1800
+    },
+    web: {
+      search: {
+        provider: 'gemini',
+        enabled: true
+      }
+    }
+  },
+  auth: {
+    profiles: {
+      'anthropic:default': {
+        provider: 'anthropic',
+        mode: 'api_key'
+      }
+    }
+  },
+  channels: {
+    whatsapp: {
+      selfChatMode: true,
+      dmPolicy: 'allowlist',
+      allowFrom: ['+420734740997'],
+      enabled: true
+    }
+  },
+  plugins: {
+    entries: {}
+  },
+  skills: {
+    install: { nodeManager: 'npm' },
+    entries: {
+      goplaces: { apiKey: process.env.GOOGLE_PLACES_API_KEY || '' },
+      '1password': { enabled: false },
+      'apple-reminders': { enabled: false },
+      'apple-notes': { enabled: false },
+      oracle: { enabled: false }
+    }
+  },
+  hooks: {
+    internal: {
+      enabled: true,
+      entries: {
+        'session-memory': { enabled: true }
+      }
+    }
+  }
+};
+
+const authProfiles = {
+  version: 1,
+  profiles: {
+    'anthropic:default': {
+      type: 'api_key',
+      provider: 'anthropic',
+      key: anthropicKey
+    },
+    'google:default': {
+      type: 'api_key',
+      provider: 'google',
+      key: googleKey
+    }
+  }
+};
+
+try {
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+  const authDir = path.join(path.dirname(configPath), 'agents/main/agent');
+  fs.mkdirSync(authDir, { recursive: true });
+  fs.writeFileSync(path.join(authDir, 'auth-profiles.json'), JSON.stringify(authProfiles, null, 2), 'utf8');
+
+  console.log('[setup] Config generated and saved to volume.');
+} catch (e) {
+  console.error('[setup] Config generation failed:', e.message);
+  process.exit(1);
+}
+INIT_EOF
 fi
 
 mkdir -p /data/bin /data/uv

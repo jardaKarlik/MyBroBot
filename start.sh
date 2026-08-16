@@ -5,21 +5,32 @@ set -euo pipefail
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-${OPENCLAW_STATE_DIR:-/home/node/.openclaw}}"
 PORT="${PORT:-18789}"
 
-# Recover from corrupted config by restoring from backup
+# Recover from corrupted config by patching broken fields
 if [ -f "$CONFIG_DIR/openclaw.json" ]; then
-    # Check if config is valid (contains a valid web.search.provider)
-    if ! grep -q '"provider"[[:space:]]*:[[:space:]]*"\(brave\|perplexity\|grok\|gemini\|kimi\)"' "$CONFIG_DIR/openclaw.json" 2>/dev/null; then
-        echo "[openclaw-init] Invalid config detected, attempting to restore from backup..."
-        # Find most recent backup and restore it
-        LATEST_BACKUP=$(ls -t "$CONFIG_DIR"/openclaw.json.bak* 2>/dev/null | head -1)
-        if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
-            echo "[openclaw-init] Restoring from backup: $LATEST_BACKUP"
-            cp "$LATEST_BACKUP" "$CONFIG_DIR/openclaw.json"
-        else
-            echo "[openclaw-init] No backup found, regenerating config..."
-            rm -f "$CONFIG_DIR/openclaw.json"
-        fi
-    fi
+    CONFIG_PATH="$CONFIG_DIR/openclaw.json" node << 'PATCH_EOF'
+const fs = require('fs');
+const configPath = process.env.CONFIG_PATH;
+try {
+  const c = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const hasModels = c.models !== undefined;
+  const origins = c.gateway?.controlUi?.allowedOrigins;
+  const originsValid = Array.isArray(origins) && origins.includes('*');
+
+  if (hasModels || !originsValid) {
+    console.log('[openclaw-init] Patching config...');
+    if (c.models) delete c.models;
+    if (!c.gateway) c.gateway = {};
+    if (!c.gateway.controlUi) c.gateway.controlUi = {};
+    c.gateway.controlUi.allowedOrigins = ['*'];
+    const backup = configPath + '.bak.' + Date.now();
+    fs.writeFileSync(backup, JSON.stringify(c, null, 2));
+    fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
+    console.log('[openclaw-init] Config patched and saved.');
+  }
+} catch (e) {
+  console.error('[openclaw-init] Patch failed:', e.message);
+}
+PATCH_EOF
 fi
 
 # ── First-boot initialization ──────────────────────────────────────────────
@@ -45,13 +56,16 @@ if [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
     "defaults": {
       "workspace": "${WORKSPACE_DIR}",
       "models": {
-        "anthropic/claude-opus-4-7": {},
-        "anthropic/claude-opus-4-5": {},
-        "google/gemini-2.5-flash": {},
-        "google/gemini-2.0-flash": {}
+        "anthropic/claude-opus-4-8": { "alias": "Claude 4.8" },
+        "anthropic/claude-opus-4-7": { "alias": "Claude 4.7" },
+        "anthropic/claude-opus-4-5": { "alias": "Claude 4.5" },
+        "anthropic/claude-sonnet-4-5": { "alias": "Sonnet 4.5" },
+        "anthropic/claude-haiku-4-5": { "alias": "Haiku 4.5" },
+        "google/gemini-2.5-flash": { "alias": "Gemini 2.5 Flash" },
+        "google/gemini-2.0-flash": { "alias": "Gemini 2.0 Flash" }
       },
       "model": {
-        "primary": "google/gemini-2.5-flash"
+        "primary": "anthropic/claude-opus-4-8"
       }
     }
   },
@@ -88,7 +102,7 @@ if [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
     },
     "web": {
       "search": {
-        "provider": "firecrawl",
+        "provider": "gemini",
         "enabled": true
       }
     }
@@ -110,27 +124,7 @@ if [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
     }
   },
   "plugins": {
-    "entries": {
-      "bonjour": { "enabled": false },
-      "firecrawl": {
-        "enabled": true,
-        "config": {
-          "webSearch": {
-            "apiKey": "${FIRECRAWL_API_KEY:-}"
-          }
-        }
-      },
-      "anthropic": { "enabled": true },
-      "google": { "enabled": true },
-      "openclaw-mem0": {
-        "enabled": true,
-        "config": {
-          "mode": "platform",
-          "apiKey": "${MEM0_API_KEY:-}",
-          "userId": "default-user"
-        }
-      }
-    }
+    "entries": {}
   },
   "skills": {
     "install": { "nodeManager": "npm" },
@@ -150,10 +144,6 @@ if [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
       }
     }
   },
-  "models": {
-    "mode": "replace",
-    "providers": {}
-  }
 }
 EOF
 

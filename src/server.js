@@ -148,25 +148,29 @@ function sleep(ms) {
 }
 
 async function waitForGatewayReady(opts = {}) {
-  const timeoutMs = opts.timeoutMs ?? 20_000;
+  const timeoutMs = opts.timeoutMs ?? 30_000;
   const start = Date.now();
+  const net = require("net");
+
   while (Date.now() - start < timeoutMs) {
     try {
-      // Try the default Control UI base path, then fall back to root.
-      const paths = ["/openclaw", "/"];
-      for (const p of paths) {
-        try {
-          const res = await fetch(`${GATEWAY_TARGET}${p}`, { method: "GET" });
-          // Any HTTP response means the port is open.
-          if (res) return true;
-        } catch {
-          // try next
-        }
-      }
+      // Check if port 18789 is actually open (gateway listening)
+      const connected = await new Promise((resolve) => {
+        const sock = net.createConnection({ host: "127.0.0.1", port: 18789, timeout: 1000 });
+        sock.on("connect", () => {
+          sock.destroy();
+          resolve(true);
+        });
+        sock.on("error", () => {
+          sock.destroy();
+          resolve(false);
+        });
+      });
+      if (connected) return true;
     } catch {
       // not ready
     }
-    await sleep(250);
+    await sleep(500);
   }
   return false;
 }
@@ -705,11 +709,11 @@ function runCmd(cmd, args, opts = {}) {
 }
 
 app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
+  const respondJson = (status, body) => {
+    if (res.writableEnded || res.headersSent) return;
+    res.status(status).json(body);
+  };
   try {
-    const respondJson = (status, body) => {
-      if (res.writableEnded || res.headersSent) return;
-      res.status(status).json(body);
-    };
     if (isConfigured()) {
       await ensureGatewayRunning();
       return respondJson(200, {
@@ -1522,6 +1526,37 @@ const server = app.listen(PORT, "0.0.0.0", async () => {
       console.log("[wrapper] gateway tokens synced");
     } catch (err) {
       console.warn(`[wrapper] failed to sync gateway tokens: ${String(err)}`);
+    }
+  }
+
+  // Sync API keys from environment variables to auth-profiles.json on every startup.
+  // This ensures the gateway always has the latest keys from Railway.
+  if (isConfigured()) {
+    try {
+      const authPath = path.join(STATE_DIR, "agents/main/agent/auth-profiles.json");
+      const authExists = fs.existsSync(authPath);
+      let auth = authExists ? JSON.parse(fs.readFileSync(authPath, "utf8")) : { version: 1, profiles: {} };
+      let changed = false;
+
+      // Sync Google API key
+      if (process.env.GOOGLE_API_KEY && (!auth.profiles["google:default"] || auth.profiles["google:default"].key !== process.env.GOOGLE_API_KEY)) {
+        auth.profiles["google:default"] = { type: "api_key", provider: "google", key: process.env.GOOGLE_API_KEY };
+        changed = true;
+      }
+
+      // Sync Anthropic API key
+      if (process.env.ANTHROPIC_API_KEY && (!auth.profiles["anthropic:default"] || auth.profiles["anthropic:default"].key !== process.env.ANTHROPIC_API_KEY)) {
+        auth.profiles["anthropic:default"] = { type: "api_key", provider: "anthropic", key: process.env.ANTHROPIC_API_KEY };
+        changed = true;
+      }
+
+      if (changed) {
+        fs.mkdirSync(path.dirname(authPath), { recursive: true });
+        fs.writeFileSync(authPath, JSON.stringify(auth, null, 2), "utf8");
+        console.log("[wrapper] API keys synced to auth-profiles.json");
+      }
+    } catch (err) {
+      console.warn(`[wrapper] failed to sync API keys: ${String(err)}`);
     }
   }
 
